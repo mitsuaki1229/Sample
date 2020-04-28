@@ -1,10 +1,9 @@
 package pinpoint
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.regions.Regions
-import com.amazonaws.services.pinpoint.AmazonPinpointClientBuilder
-import com.amazonaws.services.pinpoint.model.*
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.regions.Region.US_EAST_1
+import software.amazon.awssdk.services.pinpoint.PinpointClient
+import software.amazon.awssdk.services.pinpoint.model.*
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.Locale
@@ -13,17 +12,12 @@ private val PROJECT_ID: String = ""
 private val ACCESS_KEY: String = ""
 private val SECRET_KEY: String = ""
 
-private val pinpointClient = AmazonPinpointClientBuilder.standard()
-    .withRegion(Regions.US_EAST_1)
-    .withCredentials(
-        AWSStaticCredentialsProvider(
-            BasicAWSCredentials(
-                ACCESS_KEY,
-                SECRET_KEY
-            )
-        )
-    )
-    .build()
+private var pinpointClient =
+    PinpointClient
+        .builder()
+        .region(US_EAST_1)
+        .credentialsProvider({ AwsBasicCredentials.create(ACCESS_KEY, SECRET_KEY) })
+        .build()
 
 fun main(args: Array<String>) {
 
@@ -40,8 +34,8 @@ fun main(args: Array<String>) {
     println("--updateCampaign--------------------------------------")
 
     campaigns?.forEach {
-        if (it.state.campaignStatus != "COMPLETED") {
-            var campaignResponse = updateCampaign(it.id)
+        if (it.state().campaignStatus().toString() != "COMPLETED") {
+            var campaignResponse = updateCampaign(it.id())
             printCampaign(campaignResponse)
         }
     }
@@ -53,79 +47,101 @@ fun main(args: Array<String>) {
 
     println("--createCampaign--------------------------------------")
 
-    var campaignResponse = createCampaign(segmentResponse.id)
+    var campaignResponse = createCampaign(segmentResponse.id())
     printCampaign(campaignResponse)
 
 
     println("--deleteSegment--------------------------------------")
 
     segments?.forEach {
-        var segmentResponse = deleteSegment(it.id)
+        var segmentResponse = deleteSegment(it.id())
         printSegment(segmentResponse)
     }
 
     println("--deleteCampaign--------------------------------------")
 
     campaigns?.forEach {
-        var campaignResponse = deleteCampaign(it.id)
+        var campaignResponse = deleteCampaign(it.id())
         printCampaign(campaignResponse)
     }
 }
 
 private fun deleteSegment(segmentId: String): SegmentResponse {
-    val deleteSegmentRequest = DeleteSegmentRequest()
-        .withApplicationId(PROJECT_ID)
-        .withSegmentId(segmentId)
+    val deleteSegmentRequest = DeleteSegmentRequest
+        .builder()
+        .applicationId(PROJECT_ID)
+        .segmentId(segmentId)
+        .build()
 
     var deleteSegmentResult = pinpointClient.deleteSegment(deleteSegmentRequest)
-    return deleteSegmentResult.segmentResponse
+    return deleteSegmentResult.segmentResponse()
 }
 
 private fun deleteCampaign(campaignId: String): CampaignResponse {
-    val deleteCampaignRequest = DeleteCampaignRequest()
-        .withApplicationId(PROJECT_ID)
-        .withCampaignId(campaignId)
+    val deleteCampaignRequest = DeleteCampaignRequest
+        .builder()
+        .applicationId(PROJECT_ID)
+        .campaignId(campaignId)
+        .build()
+
     var deleteCampaignResult = pinpointClient.deleteCampaign(deleteCampaignRequest)
-    return deleteCampaignResult.campaignResponse
+    return deleteCampaignResult.campaignResponse()
 }
 
 private fun getSegments(): MutableList<SegmentResponse>? {
-    val request = GetSegmentsRequest()
-    request.applicationId = PROJECT_ID
+    val request = GetSegmentsRequest
+        .builder()
+        .applicationId(PROJECT_ID)
+        .build()
+
     var getSegmentsResult = pinpointClient.getSegments(request)
-    return getSegmentsResult.segmentsResponse.item
+    return getSegmentsResult.segmentsResponse().item()
 }
 
 private fun createSegment(): SegmentResponse {
     val list: MutableList<String> = ArrayList()
     list.add("0.0.0")
 
-    val dimension = SetDimension()
-    dimension.setDimensionType(DimensionType.INCLUSIVE)
-    dimension.setValues(list)
+    val dimension = SetDimension
+        .builder()
+        .dimensionType(DimensionType.INCLUSIVE)
+        .values(list)
+        .build()
 
-    val demographics = SegmentDemographics()
-    demographics.appVersion = dimension
+    val demographics = SegmentDemographics
+        .builder()
+        .appVersion(dimension)
+        .build()
 
-    val dimensions = SegmentDimensions()
-    dimensions.demographic = demographics
+    val dimensions = SegmentDimensions
+        .builder()
+        .demographic(demographics)
+        .build()
 
-    val writeSegmentRequest = WriteSegmentRequest()
-    writeSegmentRequest.name = "createSegment-" + geRandomString()
-    writeSegmentRequest.dimensions = dimensions
+    val writeSegmentRequest = WriteSegmentRequest
+        .builder()
+        .name("createSegment-" + geRandomString())
+        .dimensions(dimensions)
+        .build()
 
-    val request = CreateSegmentRequest()
-    request.applicationId = PROJECT_ID
-    request.writeSegmentRequest = writeSegmentRequest
+    val request = CreateSegmentRequest
+        .builder()
+        .applicationId(PROJECT_ID)
+        .writeSegmentRequest(writeSegmentRequest)
+        .build()
+
     var createSegmentResult = pinpointClient.createSegment(request)
-    return createSegmentResult.segmentResponse
+    return createSegmentResult.segmentResponse()
 }
 
 private fun getCampaigns(): MutableList<CampaignResponse>? {
-    var request = GetCampaignsRequest()
-    request.applicationId = PROJECT_ID
+    var request = GetCampaignsRequest
+        .builder()
+        .applicationId(PROJECT_ID)
+        .build()
+
     var getCampaignsResult = pinpointClient.getCampaigns(request)
-    return getCampaignsResult.campaignsResponse.item
+    return getCampaignsResult.campaignsResponse().item()
 }
 
 private fun createCampaign(segmentId: String): CampaignResponse {
@@ -136,45 +152,64 @@ private fun createCampaign(segmentId: String): CampaignResponse {
         }
     }
 
-    val message = Message()
-    message.action = "OPEN_APP"
-    message.silentPush = true
-    message.jsonBody = pinpointJson.toString()
+    val message = Message
+        .builder()
+        .action("OPEN_APP")
+        .silentPush(true)
+        .jsonBody(pinpointJson.toString())
+        .build()
 
-    val messageConfiguration = MessageConfiguration()
-    messageConfiguration.defaultMessage = message
+    val messageConfiguration = MessageConfiguration
+        .builder()
+        .defaultMessage(message)
+        .build()
 
-    val schedule = Schedule()
-    schedule.startTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.JAPAN).format(Date())
-    schedule.setIsLocalTime(false)
-    schedule.frequency = Frequency.ONCE.toString()
+    val schedule = Schedule
+        .builder()
+        .startTime(SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.JAPAN).format(Date()))
+        .isLocalTime(false)
+        .frequency(Frequency.ONCE.toString())
+        .build()
 
-    val campaignLimits = CampaignLimits()
+    val campaignLimits = CampaignLimits
+        .builder()
+        .build()
 
-    val writeCampaignRequest = WriteCampaignRequest()
-    writeCampaignRequest.name = "createCampaign-" + geRandomString()
-    writeCampaignRequest.setIsPaused(false)
-    writeCampaignRequest.messageConfiguration = messageConfiguration
-    writeCampaignRequest.segmentId = segmentId
-    writeCampaignRequest.schedule = schedule
-    writeCampaignRequest.limits = campaignLimits
+    val writeCampaignRequest = WriteCampaignRequest
+        .builder()
+        .name("createCampaign-" + geRandomString())
+        .isPaused(false)
+        .messageConfiguration(messageConfiguration)
+        .segmentId(segmentId)
+        .schedule(schedule)
+        .limits(campaignLimits)
+        .build()
 
-    val request = CreateCampaignRequest()
-        .withApplicationId(PROJECT_ID)
-        .withWriteCampaignRequest(writeCampaignRequest)
+    val request = CreateCampaignRequest
+        .builder()
+        .applicationId(PROJECT_ID)
+        .writeCampaignRequest(writeCampaignRequest)
+        .build()
+
     var createCampaignResult = pinpointClient.createCampaign(request)
-    return createCampaignResult.campaignResponse
+    return createCampaignResult.campaignResponse()
 }
 
 private fun updateCampaign(campaignId: String): CampaignResponse {
-    val writeCampaignRequest = WriteCampaignRequest()
-    writeCampaignRequest.name = geRandomString()
+    val writeCampaignRequest = WriteCampaignRequest
+        .builder()
+        .name(geRandomString())
+        .build()
 
-    var request = UpdateCampaignRequest()
-    request.withApplicationId(PROJECT_ID).withCampaignId(campaignId).withWriteCampaignRequest(writeCampaignRequest)
+    var request = UpdateCampaignRequest
+        .builder()
+        .applicationId(PROJECT_ID)
+        .campaignId(campaignId)
+        .writeCampaignRequest(writeCampaignRequest)
+        .build()
 
     var updateCampaignResult = pinpointClient.updateCampaign(request)
-    return updateCampaignResult.campaignResponse
+    return updateCampaignResult.campaignResponse()
 }
 
 // tools
@@ -195,15 +230,15 @@ private fun printSegments(segments: MutableList<SegmentResponse>?) {
 
 private fun printSegment(segment: SegmentResponse) {
     println("Segment")
-    println("applicationId: " + segment.applicationId)
-    println("creationDate: " + segment.creationDate)
-    println("dimensions: " + segment.dimensions)
-    println("id: " + segment.id)
-    println("importDefinition: " + segment.importDefinition)
-    println("lastModifiedDate: " + segment.lastModifiedDate)
-    println("name: " + segment.name)
-    println("segmentType: " + segment.segmentType)
-    println("version: " + segment.version)
+    println("applicationId: " + segment.applicationId())
+    println("creationDate: " + segment.creationDate())
+    println("dimensions: " + segment.dimensions())
+    println("id: " + segment.id())
+    println("importDefinition: " + segment.importDefinition())
+    println("lastModifiedDate: " + segment.lastModifiedDate())
+    println("name: " + segment.name())
+    println("segmentType: " + segment.segmentType())
+    println("version: " + segment.version())
 }
 
 private fun printCampaigns(campaigns: MutableList<CampaignResponse>?) {
@@ -214,23 +249,23 @@ private fun printCampaigns(campaigns: MutableList<CampaignResponse>?) {
 
 private fun printCampaign(campaign: CampaignResponse) {
     println("CampaignResponse")
-    println("additionalTreatments: " + campaign.additionalTreatments)
-    println("applicationId: " + campaign.applicationId)
-    println("creationDate: " + campaign.creationDate)
-    println("defaultState: " + campaign.defaultState)
-    println("description: " + campaign.description)
-    println("holdoutPercent: " + campaign.holdoutPercent)
-    println("id: " + campaign.id)
-    println("isPaused: " + campaign.isPaused())
-    println("lastModifiedDate: " + campaign.lastModifiedDate)
-    println("limits: " + campaign.limits)
-    println("messageConfiguration: " + campaign.messageConfiguration)
-    println("name: " + campaign.name)
-    println("schedule: " + campaign.schedule)
-    println("segmentId: " + campaign.segmentId)
-    println("segmentVersion: " + campaign.segmentVersion)
-    println("state: " + campaign.state)
-    println("treatmentDescription: " + campaign.treatmentDescription)
-    println("treatmentName: " + campaign.treatmentName)
-    println("version: " + campaign.version)
+    println("additionalTreatments: " + campaign.additionalTreatments())
+    println("applicationId: " + campaign.applicationId())
+    println("creationDate: " + campaign.creationDate())
+    println("defaultState: " + campaign.defaultState())
+    println("description: " + campaign.description())
+    println("holdoutPercent: " + campaign.holdoutPercent())
+    println("id: " + campaign.id())
+    println("isPaused: " + campaign.isPaused)
+    println("lastModifiedDate: " + campaign.lastModifiedDate())
+    println("limits: " + campaign.limits())
+    println("messageConfiguration: " + campaign.messageConfiguration())
+    println("name: " + campaign.name())
+    println("schedule: " + campaign.schedule())
+    println("segmentId: " + campaign.segmentId())
+    println("segmentVersion: " + campaign.segmentVersion())
+    println("state: " + campaign.state())
+    println("treatmentDescription: " + campaign.treatmentDescription())
+    println("treatmentName: " + campaign.treatmentName())
+    println("version: " + campaign.version())
 }
